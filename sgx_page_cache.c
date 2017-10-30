@@ -424,7 +424,7 @@ int sgx_page_cache_init(resource_size_t start, unsigned long size)
 {
 	unsigned long i;
 	struct sgx_epc_page *new_epc_page, *entry;
-	struct list_head *parser, *temp;
+	struct list_head *parser, *temp, free_list;
 
 	for (i = 0; i < size; i += PAGE_SIZE) {
 		new_epc_page = kzalloc(sizeof(*new_epc_page), GFP_KERNEL);
@@ -444,11 +444,13 @@ int sgx_page_cache_init(resource_size_t start, unsigned long size)
 
 	return 0;
 err_freelist:
-	list_for_each_safe(parser, temp, &sgx_free_list) {
-		spin_lock(&sgx_free_list_lock);
+	spin_lock(&sgx_free_list_lock);
+	list_replace_init(&sgx_free_list, &free_list);
+	spin_unlock(&sgx_free_list_lock);
+
+	list_for_each_safe(parser, temp, &free_list) {
 		entry = list_entry(parser, struct sgx_epc_page, free_list);
 		list_del(&entry->free_list);
-		spin_unlock(&sgx_free_list_lock);
 		kfree(entry);
 	}
 	return -ENOMEM;
